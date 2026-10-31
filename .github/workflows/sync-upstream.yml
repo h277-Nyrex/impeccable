@@ -26,9 +26,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      # main follows upstream and is force-pushed, so upstream history rewrites
-      # would drop commits. archive is append-only: it absorbs every previous
-      # main tip as a merge parent before the rebase, and is never force-pushed.
+      # `archive` is append-only and never force-pushed. Every run merges the
+      # previous main tip into it, so upstream history rewrites (force-push,
+      # orphan rebuild, filter-repo) cannot orphan anything we have seen.
       - name: Archive previous main
         run: |
           prev=$(git rev-parse main)
@@ -40,15 +40,16 @@ jobs:
           fi
           git merge -s ours --no-edit -m "archive: preserve main@$prev" "$prev"
           git push origin archive
-          git checkout main
 
-      - name: Fetch upstream
+      # main is a plain mirror of upstream: reset instead of rebase, so an
+      # upstream rewrite never replays our history and never conflicts.
+      - name: Reset main to upstream
         run: |
-          git remote add upstream https://github.com/pbakaus/impeccable.git
-          git fetch upstream main --tags --force
-
-      - name: Rebase onto upstream
-        run: git rebase upstream/main
+          git fetch https://github.com/pbakaus/impeccable.git main --tags --force
+          git checkout -B main FETCH_HEAD
+          git checkout archive -- .github/workflows/sync-upstream.yml
+          git add -A
+          git commit -m "ci: mirror upstream@$(git rev-parse --short FETCH_HEAD)" || true
 
       - name: Push
         run: git push origin main --force-with-lease --tags
