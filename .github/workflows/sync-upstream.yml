@@ -26,6 +26,22 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+      # main follows upstream and is force-pushed, so upstream history rewrites
+      # would drop commits. archive is append-only: it absorbs every previous
+      # main tip as a merge parent before the rebase, and is never force-pushed.
+      - name: Archive previous main
+        run: |
+          prev=$(git rev-parse main)
+          if git ls-remote --exit-code --heads origin archive >/dev/null 2>&1; then
+            git fetch origin archive
+            git checkout -B archive origin/archive
+          else
+            git checkout -B archive "$prev"
+          fi
+          git merge -s ours --no-edit -m "archive: preserve main@$prev" "$prev"
+          git push origin archive
+          git checkout main
+
       - name: Fetch upstream
         run: |
           git remote add upstream https://github.com/pbakaus/impeccable.git
